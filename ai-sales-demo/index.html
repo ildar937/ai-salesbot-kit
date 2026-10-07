@@ -1,0 +1,446 @@
+<title>ИИ-продажник: демо</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Макет: шапка-статус + лента чата + строка ввода, под лентой — сворачиваемая
+     внутренняя панель заявки (то, что в брифе названо "внутренний просмотр"). */
+  :root{
+    --bg:#eef2f0; --surface:#ffffff; --surface-2:#e4ebe8; --fg:#13201c; --muted:#5b6b66;
+    --border:#cfdbd6; --accent:#0f6e5c; --accent-fg:#ffffff; --accent-soft:#dcece7;
+    --warn:#a35a12; --warn-soft:#f6e8d6; --danger:#9c3b3b; --danger-soft:#f6dede;
+    --bubble-bot:#ffffff; --bubble-user:#0f6e5c; --bubble-user-fg:#ffffff;
+    --shadow:0 1px 2px rgba(20,32,28,.06), 0 8px 24px rgba(20,32,28,.06);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0d1512; --surface:#15201c; --surface-2:#1b2824; --fg:#e7efec; --muted:#93a8a1;
+      --border:#2a3c35; --accent:#36b89a; --accent-fg:#06211a; --accent-soft:#17352c;
+      --warn:#d99a4e; --warn-soft:#2e2316; --danger:#e08a8a; --danger-soft:#2e1b1b;
+      --bubble-bot:#1b2824; --bubble-user:#1f6e59; --bubble-user-fg:#f3fbf8;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1512; --surface:#15201c; --surface-2:#1b2824; --fg:#e7efec; --muted:#93a8a1;
+    --border:#2a3c35; --accent:#36b89a; --accent-fg:#06211a; --accent-soft:#17352c;
+    --warn:#d99a4e; --warn-soft:#2e2316; --danger:#e08a8a; --danger-soft:#2e1b1b;
+    --bubble-bot:#1b2824; --bubble-user:#1f6e59; --bubble-user-fg:#f3fbf8;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--fg);font-family:'Work Sans',system-ui,sans-serif;padding-inline:16px;padding-block:20px;max-width:760px;margin:0 auto}
+  h1,h2,h3{font-family:'Fraunces',Georgia,serif;text-wrap:balance;margin:0}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+  .wrap{display:flex;flex-direction:column;gap:14px;min-width:0}
+
+  .masthead{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .masthead h1{font-size:22px;font-weight:600}
+  .masthead p{margin:4px 0 0;color:var(--muted);font-size:13.5px}
+
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);min-width:0}
+
+  .status-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--border)}
+  .pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 10px;font-size:12px;font-family:'IBM Plex Mono',monospace;border:1px solid var(--border);background:var(--surface-2);color:var(--muted);white-space:nowrap}
+  .pill b{color:var(--fg);font-weight:500}
+  .pill.demo{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+  .spacer{flex:1}
+  .ghost-btn{appearance:none;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Work Sans',sans-serif;font-size:12.5px;padding:6px 10px;border-radius:8px;cursor:pointer}
+  .ghost-btn:hover{color:var(--fg);border-color:var(--accent)}
+
+  .chat{display:flex;flex-direction:column;gap:10px;padding:16px;max-height:52vh;min-height:220px;overflow-y:auto}
+  .msg{max-width:85%;min-width:0;padding:10px 13px;border-radius:14px;font-size:14.5px;line-height:1.45;white-space:pre-wrap;box-shadow:var(--shadow)}
+  .msg.bot{background:var(--bubble-bot);border:1px solid var(--border);align-self:flex-start;border-bottom-left-radius:4px}
+  .msg.user{background:var(--bubble-user);color:var(--bubble-user-fg);align-self:flex-end;border-bottom-right-radius:4px}
+  .msg.sys{align-self:center;background:transparent;box-shadow:none;color:var(--muted);font-size:12.5px;text-align:center;max-width:100%}
+  .skill-tag{display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--accent);opacity:.8;margin-bottom:4px;letter-spacing:.02em}
+  .typing{align-self:flex-start;display:flex;gap:4px;padding:12px 14px}
+  .typing span{width:6px;height:6px;border-radius:50%;background:var(--muted);opacity:.5;animation:bounce 1.2s infinite ease-in-out}
+  .typing span:nth-child(2){animation-delay:.15s}
+  .typing span:nth-child(3){animation-delay:.3s}
+  @keyframes bounce{0%,80%,100%{transform:translateY(0);opacity:.35}40%{transform:translateY(-4px);opacity:.9}}
+  @media (prefers-reduced-motion: reduce){ .typing span{animation:none} }
+
+  .chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 10px}
+  .chip{appearance:none;border:1px solid var(--border);background:var(--surface-2);color:var(--fg);font-size:12px;padding:6px 10px;border-radius:999px;cursor:pointer;font-family:'Work Sans',sans-serif}
+  .chip:hover{border-color:var(--accent);color:var(--accent)}
+
+  form.inputrow{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--border);min-width:0}
+  .inputrow input[type=text]{flex:1;min-width:0;border:1px solid var(--border);background:var(--bg);color:var(--fg);border-radius:10px;padding:10px 12px;font-size:14.5px;font-family:inherit}
+  .inputrow input[type=text]:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .send-btn{background:var(--accent);color:var(--accent-fg);border:none;border-radius:10px;padding:0 16px;font-weight:600;font-size:14px;cursor:pointer}
+  .send-btn:disabled{opacity:.5;cursor:default}
+  .stop-btn{border:1px solid var(--danger);background:transparent;color:var(--danger);border-radius:10px;padding:0 12px;font-size:13px;cursor:pointer;white-space:nowrap}
+  .stop-btn.active{background:var(--danger-soft)}
+  .err{color:var(--danger);font-size:12px;padding:0 16px 8px}
+
+  details.inner{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow)}
+  details.inner>summary{cursor:pointer;list-style:none;padding:12px 14px;font-size:13.5px;color:var(--muted);display:flex;align-items:center;gap:8px}
+  details.inner>summary::-webkit-details-marker{display:none}
+  details.inner>summary b{color:var(--fg);font-weight:600;font-family:'Work Sans',sans-serif}
+  .inner-body{padding:0 14px 14px;display:flex;flex-direction:column;gap:10px}
+  .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 10px;font-size:13px;min-width:0}
+  .kv div:nth-child(odd){color:var(--muted)}
+  .kv div:nth-child(even){font-family:'IBM Plex Mono',monospace;word-break:break-word}
+  .loglist{display:flex;flex-direction:column;gap:3px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted);max-height:140px;overflow-y:auto;background:var(--surface-2);border-radius:8px;padding:8px 10px}
+
+  footer{color:var(--muted);font-size:12px;line-height:1.5;padding-block:4px 10px}
+  footer a{color:var(--accent)}
+</style>
+
+<div class="wrap">
+  <div class="masthead">
+    <div>
+      <h1>IT&#8209;Service Online · ИИ&#8209;продажник</h1>
+      <p>Прототип по заданию из подарочного материала (Никита Бархатов, Noya AI) — тестовый веб-чат, без реальной рассылки и оплаты.</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="status-row" id="statusRow">
+      <span class="pill demo">● демо-режим: правило-движок, без вызова реальной модели</span>
+      <span class="pill">состояние: <b id="stateLabel">new</b></span>
+      <span class="pill">прайс: <b id="catalogLabel">—</b></span>
+      <div class="spacer"></div>
+      <button class="ghost-btn" id="resetBtn" type="button">Сбросить диалог</button>
+    </div>
+
+    <div class="chat" id="chat" role="log" aria-live="polite"></div>
+    <div id="errBox" class="err" hidden></div>
+
+    <div class="chips" id="chips">
+      <button class="chip" type="button" data-text="Нужен сайт для кофейни, хочу одну страницу">Нужен лендинг для кафе</button>
+      <button class="chip" type="button" data-text="Сколько стоит?">Сколько стоит?</button>
+      <button class="chip" type="button" data-text="А скидку сделаете?">Попросить скидку</button>
+      <button class="chip" type="button" data-text="Позовите, пожалуйста, человека">Позвать менеджера</button>
+      <button class="chip" type="button" data-text="Нет, не хочу оставлять контакт">Отказаться от контакта</button>
+    </div>
+
+    <form class="inputrow" id="form">
+      <input type="text" id="input" maxlength="500" placeholder="Напишите сообщение клиента…" autocomplete="off">
+      <button class="stop-btn" id="stopBtn" type="button" title="Остановить автоматические ответы для этого диалога">Стоп</button>
+      <button class="send-btn" id="sendBtn" type="submit">Отправить</button>
+    </form>
+  </div>
+
+  <details class="inner" id="innerPanel">
+    <summary><b>Внутренняя панель</b> — карточка заявки и лог навыков (в проде доступна только сотруднику, здесь — для демонстрации)</summary>
+    <div class="inner-body">
+      <div class="kv" id="leadKv"></div>
+      <div class="loglist" id="logList"></div>
+    </div>
+  </details>
+
+  <footer>
+    Демо-ограничения: без реального провайдера модели, без CRM/мессенджеров, без оплаты и массовых рассылок —
+    так задано в брифе первой версии. Передача менеджеру — заглушка (<span class="mono">delivery_status: "demo"</span>).
+    Полный набор файлов (каталог, навыки, тесты) — в пакете рядом с этим демо.
+  </footer>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ---- каталог (та же версия, что в catalog.json пакета) ----
+  var catalog = {
+    version: "2026-10-05-demo1",
+    owner: "IT-Service Online",
+    currency: "RUB",
+    items: [
+      { id:"landing", name:"Лендинг (сайт-визитка) под ключ", price:3000, period:"разовый платёж", timeline:"1-2 дня",
+        includes:["готовый шаблон под вашу нишу","форма заявки с сайта","базовая SEO-разметка"],
+        limits:["1 страница","без интернет-магазина","домен/хостинг — ваши либо тестовый адрес"] },
+      { id:"corporate", name:"Корпоративный сайт на WordPress", price:5000, period:"разовый платёж", timeline:"3-5 дней",
+        includes:["несколько страниц: главная, услуги, о компании, контакты","админка WordPress","базовая SEO-разметка"],
+        limits:["без интернет-магазина","хостинг и домен — клиента"] },
+      { id:"shop", name:"Интернет-магазин на WordPress + WooCommerce", price:10000, period:"разовый платёж", timeline:"7 дней",
+        includes:["до 20 товаров на старте","корзина и оформление заказа","форма обратной связи"],
+        limits:["хостинг клиента","интеграция платёжной системы — отдельно"] }
+    ]
+  };
+
+  // ---- движок (та же логика, что в engine.js пакета; см. его для подробных комментариев) ----
+  function clean(s,maxLen){ if(typeof s!=='string') return ''; var out=s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').trim(); if(maxLen&&out.length>maxLen) out=out.slice(0,maxLen); return out; }
+  function findPhoneOrEmail(t){ t=String(t||''); var email=t.match(/[^\s@]+@[^\s@]+\.[^\s@]+/); var phone=t.match(/\+?\d[\d\-\s()]{6,}\d/); if(email) return {kind:'email',value:email[0]}; if(phone) return {kind:'phone',value:phone[0].replace(/\s+/g,' ').trim()}; return null; }
+  function hashId(str){ var h=0,s=String(str); for(var i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))|0; } return 'lead_'+Math.abs(h).toString(36); }
+
+  var PATTERNS = {
+    humanRequest:/человек|менеджер|оператор|живого|позовите|жалоб/i,
+    declineStop:/не пиш(ите)?|отстав(ьте)?|больше не звон|удали(те)? мои данные|перестань(те)?|не звони/i,
+    priceQuestion:/сколько стоит|сколько будет стоить|какая цена|цена\b|стоимост/i,
+    discountRequest:/скидк|дешевле|подешевле|уступ/i,
+    consentYes:/^(да|хорошо|ок|окей|согласен|согласна|давайте|устраивает|го|пойдёт|подходит)(?=$|[\s,.!?])/i,
+    consentNo:/^(нет|не хочу|не надо|не сейчас)(?=$|[\s,.!?])/i,
+    rulesOverrideAttempt:/игнорируй (правила|инструкции)|покажи (секрет|систем|промпт)|забудь (правила|инструкции)|ты теперь|новая роль|режим разработчика|developer mode|system prompt/i
+  };
+
+  function detectIntent(message){
+    var text=clean(message,2000);
+    if(!text) return {type:'empty',text:text};
+    var injectionAttempt=PATTERNS.rulesOverrideAttempt.test(text);
+    if(PATTERNS.declineStop.test(text)) return {type:'decline_stop',text:text,injectionAttempt:injectionAttempt};
+    if(PATTERNS.humanRequest.test(text)) return {type:'human_request',text:text,injectionAttempt:injectionAttempt};
+    if(PATTERNS.priceQuestion.test(text)) return {type:'price_question',text:text,injectionAttempt:injectionAttempt};
+    if(PATTERNS.discountRequest.test(text)) return {type:'discount_request',text:text,injectionAttempt:injectionAttempt};
+    var contact=findPhoneOrEmail(text);
+    if(contact) return {type:'contact_info',text:text,contact:contact,injectionAttempt:injectionAttempt};
+    if(PATTERNS.consentYes.test(text)) return {type:'consent_yes',text:text,injectionAttempt:injectionAttempt};
+    if(PATTERNS.consentNo.test(text)) return {type:'consent_no',text:text,injectionAttempt:injectionAttempt};
+    return {type:'generic',text:text,injectionAttempt:injectionAttempt};
+  }
+
+  var OUT_OF_SCOPE=/seo-продвижен|продвижение сайта|мобильное приложени|доработ.*(сайт|магазин)|таргет(ированная)? реклама|реклама в яндекс/i;
+  function getCatalogItem(id){ for(var i=0;i<catalog.items.length;i++){ if(catalog.items[i].id===id) return catalog.items[i]; } return null; }
+  function matchProducts(brief){
+    var text=(brief.task||'').toLowerCase();
+    if(OUT_OF_SCOPE.test(text)) return [];
+    function nicheScore(item){
+      if(/магазин|товар|woocommerce|продаж[аи] онлайн/.test(text) && item.id==='shop') return 3;
+      if(/корпоратив|компани|несколько страниц|о нас/.test(text) && item.id==='corporate') return 3;
+      if(/лендинг|визитк|одна страница|быстро/.test(text) && item.id==='landing') return 3;
+      return 0;
+    }
+    var candidates=catalog.items.map(function(item){ return {item:item,score:nicheScore(item)}; });
+    var hasNiche=candidates.some(function(c){ return c.score>0; });
+    if(hasNiche) candidates=candidates.filter(function(c){ return c.score>0; });
+    if(brief.budget!=null){
+      var affordable=candidates.filter(function(c){ return c.item.price<=brief.budget; });
+      if(affordable.length===0) return [];
+      candidates=affordable;
+    }
+    candidates.sort(function(a,b){ return b.score-a.score; });
+    return candidates.slice(0,3).map(function(c){ return c.item; });
+  }
+  function priceLine(item){ return item.name+': '+item.price+' ₽ ('+item.period+'), срок — '+item.timeline+'. Источник: прайс '+catalog.version+'.'; }
+
+  function createConversation(id){
+    return { id:id, state:'new', brief:{task:null,budget:null,deadline:null}, offeredProductId:null,
+      consentStatus:'none', lead:null, stopped:false, closedReason:null, log:[] };
+  }
+  function logStep(conv,note){ conv.log.push({t:Date.now(),note:note}); }
+
+  function skillDiscovery(conv,intent){
+    if(!conv.brief.task) conv.brief.task=intent.text;
+    conv.state='discovery';
+    logStep(conv,'discovery: собран бриф');
+    return {reply:'Подскажите, пожалуйста, какой сайт нужен: сайт-визитка на одну страницу, несколько страниц о компании, или интернет-магазин с товарами?', skill:'sales-discovery'};
+  }
+  function skillProductMatch(conv){
+    var matches=matchProducts(conv.brief);
+    if(!matches.length){
+      conv.state='human_pending';
+      logStep(conv,'product-match: подходящего варианта нет — передача человеку');
+      return {reply:'Под такую задачу готового варианта в текущей линейке нет — передам менеджеру, чтобы предложил индивидуальное решение.', skill:'sales-product-match'};
+    }
+    conv.offeredProductId=matches[0].id;
+    conv.state='offer';
+    var lines=matches.map(function(m){ return '• '+priceLine(m); }).join('\n');
+    logStep(conv,'product-match: предложено '+matches.map(function(m){return m.id;}).join(', '));
+    return {reply:'Вот подходящие варианты:\n'+lines+'\n\nПередать заявку менеджеру, чтобы согласовать детали и сроки?', skill:'sales-product-match'};
+  }
+  function skillObjections(conv,intent){
+    if(intent.type==='discount_request'){
+      logStep(conv,'objections: запрос скидки без полномочий — отказ');
+      return {reply:'Скидку без согласования дать не могу — цена в прайсе актуальная и единая для всех. Если условия важны, могу передать вопрос менеджеру.', skill:'sales-objections'};
+    }
+    logStep(conv,'objections: обработано сомнение');
+    return {reply:'Понимаю сомнение. Цена и состав — из актуального прайса, без скрытых доплат. Если нужно — могу сравнить варианты подробнее или передать вопрос менеджеру.', skill:'sales-objections'};
+  }
+  function skillLeadCapture(conv,contact,idempotencyKey){
+    var key=idempotencyKey||hashId(conv.id);
+    if(conv.lead && conv.lead.idempotency_key===key){
+      logStep(conv,'lead-capture: повтор операции — возвращён прежний id');
+      return {reply:'Заявка уже оформлена (№ '+conv.lead.lead_id+'). Менеджер свяжется по указанному контакту.', skill:'sales-lead-capture', lead:conv.lead};
+    }
+    var product=getCatalogItem(conv.offeredProductId);
+    var lead={ lead_id:hashId(key), conversation_id:conv.id, idempotency_key:key,
+      contact: contact?contact.value:null, contact_kind: contact?contact.kind:null,
+      consent_status:'given', consent_time:Date.now(), need:conv.brief.task,
+      product_id: product?product.id:'unknown', next_step:'передача менеджеру', delivery_status:'demo' };
+    conv.lead=lead; conv.state='lead_draft'; conv.consentStatus='given';
+    logStep(conv,'lead-capture: создана заявка '+lead.lead_id);
+    return {reply:'Заявка оформлена (№ '+lead.lead_id+'). В демо-режиме реальная отправка менеджеру не выполняется — это заглушка.', skill:'sales-lead-capture', lead:lead};
+  }
+  function skillHumanHandoff(conv,reason){
+    var already=conv.state==='human_pending';
+    conv.state='human_pending';
+    logStep(conv,'human-handoff: '+reason);
+    return {reply: already ? 'Диалог уже передан менеджеру, новых автоматических предложений не будет.' : 'Передаю менеджеру: он свяжется и разберётся в вопросе. Автоматические предложения по этому диалогу останавливаю.', skill:'sales-human-handoff'};
+  }
+
+  function route(conv,rawMessage){
+    if(conv.stopped) return {reply:'Автоматические ответы для этого диалога остановлены.', skill:'—', stopped:true};
+    var intent=detectIntent(rawMessage);
+    if(intent.type==='empty') return {reply:'Не увидел текста сообщения — напишите, пожалуйста, вопрос ещё раз.', skill:'—'};
+
+    if(intent.type==='decline_stop'){
+      conv.state='closed'; conv.closedReason='client_declined'; conv.stopped=true;
+      logStep(conv,'router: клиент попросил не писать — диалог закрыт');
+      return {reply:'Хорошо, больше не буду писать по этому вопросу.', skill:'sales-human-handoff'};
+    }
+    if(intent.type==='human_request') return skillHumanHandoff(conv,'запрос клиента на человека');
+    if(conv.state==='human_pending') return {reply:'Диалог передан менеджеру — дождитесь ответа, автоматические предложения приостановлены.', skill:'sales-human-handoff'};
+    if(conv.state==='closed') return {reply:'Диалог закрыт. Если нужно обсудить что-то новое — напишите, пожалуйста, отдельно.', skill:'—'};
+
+    if(intent.type==='price_question'){ if(!conv.brief.task) conv.brief.task=intent.text; return skillProductMatch(conv); }
+    if(intent.type==='discount_request') return skillObjections(conv,intent);
+
+    if(intent.type==='contact_info'){
+      if(conv.state==='offer' || conv.state==='consent_pending') return skillLeadCapture(conv,intent.contact);
+      return {reply:'Спасибо, контакт вижу. Сначала уточним вариант сайта, а затем оформим заявку с этим контактом.', skill:'sales-lead-capture'};
+    }
+    if(intent.type==='consent_no'){
+      if(conv.state==='offer' || conv.state==='consent_pending'){
+        conv.consentStatus='declined';
+        logStep(conv,'router: клиент отказался оставлять контакт');
+        return {reply:'Хорошо, контакт не нужен. Если понадобится — дайте знать.', skill:'sales-lead-capture'};
+      }
+    }
+    if(intent.type==='consent_yes'){
+      if(conv.state==='offer'){
+        conv.state='consent_pending'; conv.consentStatus='requested';
+        logStep(conv,'router: согласие на передачу — запрашиваем контакт');
+        return {reply:'Отлично. Оставьте, пожалуйста, телефон или e-mail — на него менеджер выйдет на связь.', skill:'sales-lead-capture'};
+      }
+      if(conv.state==='new' || conv.state==='discovery') return skillDiscovery(conv,intent);
+    }
+
+    if(conv.state==='new') return skillDiscovery(conv,intent);
+    if(conv.state==='discovery'){ conv.brief.task=conv.brief.task||intent.text; return skillProductMatch(conv); }
+    if(conv.state==='offer' || conv.state==='consent_pending') return skillObjections(conv,intent);
+    return {reply:'Уточните, пожалуйста, вопрос — я по профилю сайтов и их стоимости.', skill:'—'};
+  }
+
+  // ---- UI ----
+  var conv=createConversation('demo-'+Math.random().toString(36).slice(2));
+  var chatEl=document.getElementById('chat');
+  var form=document.getElementById('form');
+  var input=document.getElementById('input');
+  var sendBtn=document.getElementById('sendBtn');
+  var stopBtn=document.getElementById('stopBtn');
+  var resetBtn=document.getElementById('resetBtn');
+  var errBox=document.getElementById('errBox');
+  var stateLabel=document.getElementById('stateLabel');
+  var catalogLabel=document.getElementById('catalogLabel');
+  var leadKv=document.getElementById('leadKv');
+  var logList=document.getElementById('logList');
+
+  catalogLabel.textContent=catalog.version;
+
+  function addMsg(role,text,skillTag){
+    var div=document.createElement('div');
+    div.className='msg '+role;
+    if(skillTag && role==='bot'){
+      var tag=document.createElement('span');
+      tag.className='skill-tag'; tag.textContent='навык: '+skillTag;
+      div.appendChild(tag);
+    }
+    div.appendChild(document.createTextNode(text));
+    chatEl.appendChild(div);
+    chatEl.scrollTop=chatEl.scrollHeight;
+  }
+  function addSys(text){
+    var div=document.createElement('div');
+    div.className='msg sys'; div.textContent=text;
+    chatEl.appendChild(div); chatEl.scrollTop=chatEl.scrollHeight;
+  }
+  function showTyping(){
+    var div=document.createElement('div');
+    div.className='typing'; div.id='typingIndicator';
+    div.innerHTML='<span></span><span></span><span></span>';
+    chatEl.appendChild(div); chatEl.scrollTop=chatEl.scrollHeight;
+    return div;
+  }
+
+  function renderPanel(){
+    stateLabel.textContent=conv.state + (conv.stopped?' (стоп)':'');
+    var lead=conv.lead;
+    leadKv.innerHTML='';
+    var rows=[
+      ['conversation_id', conv.id],
+      ['состояние', conv.state],
+      ['согласие', conv.consentStatus],
+      ['выбранный товар', conv.offeredProductId || '—'],
+      ['lead_id', lead ? lead.lead_id : '—'],
+      ['контакт', lead ? (lead.contact || '—') : '—'],
+      ['delivery_status', lead ? lead.delivery_status : '—']
+    ];
+    rows.forEach(function(r){
+      var k=document.createElement('div'); k.textContent=r[0];
+      var v=document.createElement('div'); v.textContent=r[1];
+      leadKv.appendChild(k); leadKv.appendChild(v);
+    });
+    logList.innerHTML='';
+    conv.log.slice(-12).forEach(function(l){
+      var d=document.createElement('div'); d.textContent=l.note;
+      logList.appendChild(d);
+    });
+  }
+
+  function setBusy(busy){
+    sendBtn.disabled=busy; input.disabled=busy;
+  }
+
+  function handleSend(text){
+    errBox.hidden=true;
+    var trimmed=(text||'').trim();
+    if(!trimmed){ errBox.hidden=false; errBox.textContent='Введите сообщение перед отправкой.'; return; }
+    addMsg('user', trimmed);
+    setBusy(true);
+    var typingEl=showTyping();
+    var delay=380+Math.random()*420;
+    window.setTimeout(function(){
+      var res;
+      try{
+        res=route(conv, trimmed);
+      }catch(e){
+        res={reply:'Сейчас не получилось обработать запрос из-за технического сбоя. Попробуйте ещё раз чуть позже, либо попросите позвать менеджера.', skill:'—'};
+      }
+      typingEl.remove();
+      addMsg('bot', res.reply, res.skill);
+      renderPanel();
+      setBusy(false);
+      input.focus();
+    }, delay);
+  }
+
+  form.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var text=input.value;
+    input.value='';
+    handleSend(text);
+  });
+
+  document.getElementById('chips').addEventListener('click', function(ev){
+    var btn=ev.target.closest('.chip');
+    if(!btn) return;
+    handleSend(btn.getAttribute('data-text'));
+  });
+
+  stopBtn.addEventListener('click', function(){
+    conv.stopped=!conv.stopped;
+    stopBtn.classList.toggle('active', conv.stopped);
+    stopBtn.textContent=conv.stopped ? 'Включить снова' : 'Стоп';
+    addSys(conv.stopped ? 'Автоматические ответы остановлены владельцем.' : 'Автоматические ответы снова включены.');
+    renderPanel();
+  });
+
+  resetBtn.addEventListener('click', function(){
+    conv=createConversation('demo-'+Math.random().toString(36).slice(2));
+    chatEl.innerHTML='';
+    stopBtn.classList.remove('active'); stopBtn.textContent='Стоп';
+    errBox.hidden=true;
+    addSys('Диалог сброшен.');
+    addMsg('bot','Здравствуйте! Я ИИ-помощник по продажам IT-Service Online (это демо-режим — реальная модель не подключена). Какой сайт вам нужен и расскажу, что подойдёт и сколько это стоит.','sales-discovery');
+    renderPanel();
+  });
+
+  // старт
+  addMsg('bot','Здравствуйте! Я ИИ-помощник по продажам IT-Service Online (это демо-режим — реальная модель не подключена). Какой сайт вам нужен и расскажу, что подойдёт и сколько это стоит.','sales-discovery');
+  renderPanel();
+})();
+</script>
